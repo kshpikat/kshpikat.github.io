@@ -82,15 +82,29 @@
             </button>
         </div>
     </div>
+   <!-- ЭКРАН 0: АВТОРИЗАЦИЯ -->
+    <div id="screen-login" class="flex-grow flex flex-col items-center justify-center px-4 hidden">
+        <div class="text-6xl mb-6 animate-bounce">🐎</div>
+        <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 mb-2 text-center">СКАЧКИ ОНЛАЙН</h1>
+        <p class="text-gray-600 mb-8 text-center<!-- ЭКРАН 0: АВТОРИЗАЦИЯ --> max-w-sm">Авторизуйтесь, чтобы создать забег или присоединиться к друзьям.</p>
+        
+        <button onclick="loginWithGoogle()" class="w-full max-w-sm py-4 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xl font-bold rounded-xl shadow-md btn-press flex items-center justify-center gap-4 transition-all">
+            <svg class="w-6 h-6" viewBox="0 0 48 48">
+                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.7 17.74 9.5 24 9.5z"></path>
+                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+                <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+            </svg>
+            Войти через Google
+        </button>
+    </div>
 
     <!-- ЭКРАН 1: ЗАГРУЗКА -->
     <div id="screen-loading" class="flex-grow flex flex-col items-center justify-center">
         <div class="text-6xl mb-4 animate-bounce">🐎</div>
         <h2 class="text-2xl font-bold text-gray-700">Подключение...</h2>
-                    <button onclick="loginWithGoogle()" class="bg-blue-500 text-white p-3 rounded-xl font-bold">
-    Войти через Google
-</button>
     </div>
+
 
     <!-- ЭКРАН 2: ГЛАВНОЕ МЕНЮ -->
     <div id="screen-home" class="flex-grow flex flex-col items-center justify-center px-4 hidden">
@@ -232,7 +246,7 @@
 
         // --- UI LIB ---
         function showScreen(screenId) {
-            ['screen-loading', 'screen-home', 'screen-lobby', 'screen-game'].forEach(id => {
+            ['screen-login', 'screen-loading', 'screen-home', 'screen-lobby', 'screen-game'].forEach(id => {
                 document.getElementById(id).classList.add('hidden');
             });
             document.getElementById(screenId).classList.remove('hidden');
@@ -249,44 +263,61 @@
             this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
         });
 
-      // --- GOOGLE AUTH ---
-window.loginWithGoogle = async () => {
-    try {
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' }); 
-        
-        await signInWithPopup(auth, provider);
-        console.log("Ваша уже существующая onAuthStateChanged перехватит успешный вход и автоматически переключит экран на 'screen-home'");
-    } catch (error) {
-        console.error("Google Auth error:", error);
-        showModalMsg("Ошибка", "Не удалось войти через Google.");
-    }
-};
+        async function init() {
+            // Подписываемся на изменения состояния авторизации
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    // Автоматически заполняем имя профиля Google (если есть)
+                    if (user.displayName) {
+                        const shortName = user.displayName.split(' ')[0].substring(0, 12);
+                        document.getElementById('hostNameInput').value = shortName;
+                        document.getElementById('playerNameInput').value = shortName;
+                    }
+                    showScreen('screen-home');
+                } else {
+                    currentUser = null;
+                    showScreen('screen-login');
+                }
+            });
 
-async function init() {
-    try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
+            try {
+                // Если есть custom token от окружения
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                }
+                // Мы больше не делаем fallback на signInAnonymously! 
+                // Теперь onAuthStateChanged покажет экран логина, если токена нет.
+            } catch (error) {
+                console.error("Auth init error:", error);
+                showScreen('screen-login');
+            }
         }
 
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                currentUser = user;
-                // Google account name
-                if (document.getElementById('hostNameInput')) {
-                    document.getElementById('hostNameInput').value = user.displayName || '';
-                }
-                if (document.getElementById('playerNameInput')) {
-                    document.getElementById('playerNameInput').value = user.displayName || '';
-                }
-                showScreen('screen-home'); 
+        // Вход через Google
+        window.loginWithGoogle = async () => {
+            const provider = new GoogleAuthProvider();
+            try {
+                showScreen('screen-loading');
+                await signInWithPopup(auth, provider);
+                // onAuthStateChanged поймает успешный вход и перекинет на screen-home
+            } catch (error) {
+                console.error("Google Login Error:", error);
+                showModalMsg("Ошибка", "Не удалось войти через Google.");
+                showScreen('screen-login');
             }
-        });
-    } catch (error) {
-        console.error("Auth error:", error);
-        showModalMsg("Ошибка", "Не удалось подключиться к серверу.");
-    }
-}
+        };
+
+        // Выход из аккаунта
+        window.logout = async () => {
+            try {
+                await signOut(auth);
+            } catch (error) {
+                console.error("Logout Error:", error);
+            }
+        };
+
+
       
 
         // --- CODE ---
