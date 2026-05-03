@@ -447,7 +447,6 @@
 
             try {
                 await updateDoc(getRoomRef(currentRoomId), {
-                  console.log("Удаляем игрока из комнаты");
                     [`players.${currentUser.uid}`]: deleteField()
                 });
             } catch (e) {
