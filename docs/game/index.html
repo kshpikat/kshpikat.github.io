@@ -222,16 +222,6 @@
         let localProgress = 0;
         const PROGRESS_PER_TAP = 4;
         const WIN_PROGRESS = 100;
-        const firebaseConfig = {
-  apiKey: "AIzaSyCWChUlQ9xKVq3kFHBP9hFEGizsUsGB4RI",
-  authDomain: "horsegame-310e8.firebaseapp.com",
-  projectId: "horsegame-310e8",
-  storageBucket: "horsegame-310e8.firebasestorage.app",
-  messagingSenderId: "245765713179",
-  appId: "1:245765713179:web:14329a9df93483a045b7be"
-};
-        appId = '1:245765713179:web:14329a9df93483a045b7be'; // typeof __app_id !== 'undefined' ? __app_id : 'default-horse-app';
-
 
         let previousStatus = null; // Для отслеживания перехода статусов
         let rematchTimeoutTimer = null; // Таймер для предотвращения дабл-клика
@@ -239,6 +229,28 @@
 
         // --- WEB AUDIO API (Генерация звука) ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Звук отсчета
+        function playCountdownBeep(isGo) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = isGo ? 'square' : 'sine';
+            osc.frequency.value = isGo ? 880 : 440; // Высокий тон для "Марш!", средний для 3-2-1
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            gain.gain.setValueAtTime(0, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (isGo ? 0.4 : 0.2));
+            
+            osc.start(audioCtx.currentTime);
+            osc.stop(audioCtx.currentTime + (isGo ? 0.4 : 0.2));
+        }
+
+        // Победные фанфары
         function playVictoryFanfare() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             
@@ -268,6 +280,7 @@
             });
         }
 
+        // --- КОНФЕТТИ ---
         function shootConfetti() {
             const colors = ['#fce18a', '#ff726d', '#b48def', '#f4306d', '#4285F4', '#34A853'];
             for (let i = 0; i < 70; i++) {
@@ -291,6 +304,17 @@
                 setTimeout(() => { confetti.remove(); }, 5000);
             }
         }
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCWChUlQ9xKVq3kFHBP9hFEGizsUsGB4RI",
+            authDomain: "horsegame-310e8.firebaseapp.com",
+            projectId: "horsegame-310e8",
+            storageBucket: "horsegame-310e8.firebasestorage.app",
+            messagingSenderId: "245765713179",
+            appId: "1:245765713179:web:14329a9df93483a045b7be"
+        };
+        appId = '1:245765713179:web:14329a9df93483a045b7be'; // typeof __app_id !== 'undefined' ? __app_id : 'default-horse-app';
+
 
         app = initializeApp(firebaseConfig);
         auth = getAuth(app);
@@ -347,6 +371,7 @@
         window.loginWithGoogle = async () => {
             const provider = new GoogleAuthProvider();
             try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
                 showScreen('screen-loading');
                 await signInWithPopup(auth, provider);
             } catch (error) {
@@ -370,6 +395,7 @@
         }
 
         window.createRoom = async () => {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             const name = document.getElementById('hostNameInput').value.trim();
             if (!name) return showModalMsg("Внимание", "Пожалуйста, введите ваше имя.");
 
@@ -398,6 +424,7 @@
         };
 
         window.joinRoom = async () => {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             const name = document.getElementById('playerNameInput').value.trim();
             const rawRoomCode = document.getElementById('roomCodeInput').value;
             const roomId = rawRoomCode.trim().toUpperCase();
@@ -500,6 +527,31 @@
         function updateUI() {
             if (!roomData) return;
 
+            // Начало обратного отсчета
+            if (roomData.status === 'countdown' && previousStatus !== 'countdown') {
+                let countVal = 3;
+                playCountdownBeep(false); // Первый гудок
+                
+                const statusText = document.getElementById('gameStatusText');
+                if(statusText) statusText.innerText = countVal;
+
+                if (window.countdownTimer) clearInterval(window.countdownTimer);
+                window.countdownTimer = setInterval(() => {
+                    countVal--;
+                    if (countVal > 0) {
+                        playCountdownBeep(false); // Гудок на 2 и 1
+                        const st = document.getElementById('gameStatusText');
+                        if (st) st.innerText = countVal;
+                    }
+                }, 1000);
+            }
+
+            // Старт гонки
+            if (roomData.status === 'racing' && previousStatus !== 'racing') {
+                if (window.countdownTimer) clearInterval(window.countdownTimer);
+                playCountdownBeep(true); // Гудок победы/старта (Марш!)
+            }
+
             // Обработка перехода в статус Finished (только один раз)
             if (roomData.status === 'finished' && previousStatus !== 'finished') {
                 playVictoryFanfare();
@@ -507,8 +559,13 @@
                 renderLeaderboard(); // Отрисовка таблицы результатов
             }
 
+            // Если перешли обратно в лобби (например, после "Реванш")
             if (roomData.status === 'waiting') {
-                document.getElementById('resultsOverlay').classList.add('hidden'); // прячем таблицу
+                const overlay = document.getElementById('resultsOverlay');
+                overlay.classList.add('hidden');
+                overlay.style.display = 'none'; // Очищаем стили flex
+                document.getElementById('leaderboardList').innerHTML = ''; // Полностью обнуляем таблицу
+                localProgress = 0; // Сбрасываем локальный прогресс
                 renderLobby();
             } else {
                 renderGame();
@@ -545,7 +602,9 @@
         }
 
         window.startRace = async () => {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
             if (Object.values(roomData.players || {}).length < 1) return;
+            
             try {
                 const updates = { status: 'countdown', winnerId: null };
                 Object.values(roomData.players).forEach(p => { updates[`players.${p.uid}.progress`] = 0; });
@@ -594,7 +653,7 @@
             });
 
             overlay.classList.remove('hidden');
-            overlay.style.display = 'flex'; // Tailwind hidden override
+            overlay.style.display = 'flex'; // Показываем окно результатов
         }
 
         function renderGame() {
@@ -609,8 +668,10 @@
             const tapBtn = document.getElementById('tapBtn');
 
             if (roomData.status === 'countdown') {
-                statusText.innerText = 'ВНИМАНИЕ...';
-                statusText.className = 'absolute left-1/2 -translate-x-1/2 text-2xl font-black text-yellow-400 animate-pulse';
+                // Во время отсчета не затираем цифры (они обновляются в интервале)
+                statusText.className = 'absolute left-1/2 -translate-x-1/2 text-4xl font-black text-yellow-400 animate-pulse';
+                if (statusText.innerText === 'ГОТОВЬТЕСЬ!') statusText.innerText = '3';
+                
                 tapBtn.disabled = true;
                 tapBtn.innerText = 'ГОТОВЬТЕСЬ...';
                 tapBtn.className = "w-full max-w-md h-full bg-gray-400 text-white rounded-3xl shadow-[0_10px_0_rgba(156,163,175,1)] text-4xl md:text-5xl font-black uppercase tracking-widest no-select disabled:opacity-80 transition-all";
@@ -746,7 +807,9 @@
             
             const myHorse = document.getElementById(`horse-${currentUser.uid}`);
             if (myHorse) {
-                showDashEffect(myHorse);
+                myHorse.classList.add('dashing');
+                void myHorse.offsetWidth; 
+                setTimeout(() => { myHorse.classList.remove('dashing'); }, 300);
                 updateHorsesPositions();
             }
 
@@ -757,14 +820,6 @@
             }
             updateDoc(getRoomRef(currentRoomId), updates).catch(err => console.error(err));
         };
-        function showDashEffect(horseElement) {
-            horseElement.classList.add('dashing');
-            void horseElement.offsetWidth; 
-            setTimeout(() => {
-                horseElement.classList.remove('dashing');
-            }, 300);
-        }
-
 
         window.resetToLobby = async () => {
             try {
