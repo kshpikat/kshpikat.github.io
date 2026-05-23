@@ -1,0 +1,1330 @@
+```html
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fruit - Horse</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+            background-color: #ffa07a; 
+            user-select: none; 
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #game-canvas { display: block; width: 100%; height: 100%; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        #joystick-zone {
+            position: absolute; bottom: 30px; left: 30px; width: 140px; height: 140px;
+            background: rgba(255, 255, 255, 0.2); border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            pointer-events: auto; touch-action: none;
+            display: flex; justify-content: center; align-items: center;
+        }
+        #joystick-knob {
+            width: 60px; height: 60px; background: rgba(0, 0, 0, 0.6);
+            border-radius: 50%; position: absolute; pointer-events: none;
+            box-shadow: inset 0 0 10px rgba(255,255,255,0.3);
+        }
+
+        /* Power Boost Knopf */
+        #btn-power-boost {
+            position: absolute; bottom: 65px; left: 190px; 
+            background: #22c55e; color: white; font-size: 26px; border-radius: 50%;
+            width: 70px; height: 70px; display: flex; justify-content: center; align-items: center;
+            border: 4px solid #16a34a; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            cursor: pointer; touch-action: none; transition: all 0.2s;
+            opacity: 0.4; pointer-events: none; 
+        }
+        #btn-power-boost.has-power { 
+            opacity: 1; pointer-events: auto; 
+            animation: pulse-green 1.5s infinite; 
+        }
+        #btn-power-boost:active { transform: scale(0.9); }
+        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+
+        #controls-right {
+            position: absolute; bottom: 30px; right: 20px;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: auto;
+            width: 160px; align-items: flex-end;
+        }
+
+        .gang-btn {
+            background: white; border: 3px solid #ddd; border-radius: 12px; padding: 12px 10px;
+            font-weight: bold; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            position: relative; transition: all 0.2s; cursor: pointer; touch-action: none;
+            font-size: 14px; width: 100%;
+        }
+        .gang-btn.active-green { border-color: #4ade80; color: #166534; background: #dcfce7; }
+        .gang-btn.inactive-blue { border-color: #3b82f6; color: #1e3a8a; background: #dbeafe; opacity: 0.8; }
+        
+        .status-icon { position: absolute; top: 5px; right: 5px; font-size: 14px; }
+        .bar-container { width: 100%; height: 6px; background: #ccc; margin-top: 8px; border-radius: 3px; overflow: hidden; }
+        .bar-fill { height: 100%; background: #4ade80; width: 100%; transition: width 0.1s linear;}
+        .inactive-blue .bar-fill { background: #3b82f6; width: 0%; }
+
+        #btn-puma-toggle {
+            background: #facc15; 
+            border: 3px solid #eab308; border-radius: 12px; padding: 8px 10px;
+            font-weight: bold; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            cursor: pointer; font-size: 13px; width: 100%; transition: all 0.2s;
+        }
+        #btn-puma-toggle.off { background: #f87171; border-color: #ef4444; color: white;}
+
+        #btn-puma-attack {
+            background: white; border: 3px solid #ccc; border-radius: 12px; padding: 10px;
+            font-weight: bold; text-align: center; font-size: 24px; width: 100%; transition: all 0.2s;
+            cursor: pointer; touch-action: none; display: flex; justify-content: center; align-items: center;
+        }
+        #btn-puma-attack.active-purple {
+            background: #a855f7; border-color: #7e22ce; box-shadow: 0 0 15px rgba(168, 85, 247, 0.8);
+            animation: pulse 0.8s infinite;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+        #action-btn {
+            background: #ef4444; color: #facc15; font-size: 35px; border-radius: 50%; width: 80px; height: 80px;
+            display: flex; justify-content: center; align-items: center; border: 4px solid #b91c1c; 
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4); margin-top: 5px; cursor: pointer; touch-action: none;
+        }
+        #action-btn:active { transform: scale(0.92); box-shadow: 0 2px 5px rgba(0,0,0,0.4); }
+
+        #hud {
+            position: absolute; top: 15px; left: 15px; pointer-events: auto;
+            background: rgba(255,255,255,0.9); padding: 10px 20px; border-radius: 12px;
+            font-weight: bold; font-size: 20px; display: flex; flex-direction: column; gap: 5px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        #health-hud { font-size: 16px; color: #dc2626; display: none; }
+        #power-hud { font-size: 16px; color: #16a34a; }
+
+        .modal {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            pointer-events: auto; display: none; flex-direction: column; gap: 15px; width: 90%; max-width: 400px;
+            z-index: 50; text-align: center;
+        }
+        .modal.show { display: flex; }
+        .modal-bg {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); pointer-events: auto; display: none; z-index: 40; backdrop-filter: blur(3px);
+        }
+        .modal-bg.show { display: block; }
+        
+        .fruit-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 10px; max-height: 150px; overflow-y: auto;}
+        .fruit-item { background: #f3f4f6; padding: 8px; border-radius: 10px; font-size: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
+        .fruit-item.reward { background: #fef08a; border: 1px solid #eab308; } 
+        
+        .heal-btn { background: #4ade80; color: #064e3b; padding: 12px; border-radius: 10px; font-weight: bold; cursor: pointer; border: 2px solid #22c55e; transition: all 0.2s;}
+        .heal-btn:disabled { background: #e5e7eb; border-color: #d1d5db; cursor: not-allowed; color: #9ca3af; }
+        .heal-btn:not(:disabled):active { transform: scale(0.95); }
+
+        #msg-box {
+            position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 12px 24px; border-radius: 30px;
+            font-weight: bold; font-size: 16px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 100;
+            text-align: center; max-width: 80%;
+        }
+
+        #top-bars-container {
+            position: absolute; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; width: 200px;
+        }
+        .top-bar-box { background: rgba(255,255,255,0.5); border-radius: 5px; height: 10px; overflow: hidden; pointer-events: none; }
+        #progress-bar-fill { height: 100%; background: #fbbf24; width: 0%; }
+        
+        #power-bar-box { display: none; border: 2px solid #16a34a; height: 14px; background: rgba(255,255,255,0.8); }
+        #power-bar-fill { height: 100%; background: #22c55e; width: 100%; box-shadow: 0 0 10px #22c55e; }
+    </style>
+</head>
+<body>
+
+    <canvas id="game-canvas"></canvas>
+
+    <div id="ui-layer">
+        <div id="hud">
+            <div>🎒 <span id="fruit-count">0</span> Obst</div>
+            <div id="power-hud">⚡ <span id="power-count">0</span> Power-Äpfel</div>
+            <div class="text-blue-600">🕒 <span id="clock-text">07:00</span> Uhr</div>
+            <div id="health-hud">Puma-Treffer: <span id="player-hits">0</span>/3</div>
+        </div>
+
+        <div id="top-bars-container">
+            <div class="top-bar-box"><div id="progress-bar-fill"></div></div>
+            <div class="top-bar-box" id="power-bar-box"><div id="power-bar-fill"></div></div>
+        </div>
+
+        <div id="msg-box">Los geht's!</div>
+
+        <div id="joystick-zone">
+            <div id="joystick-knob"></div>
+        </div>
+        
+        <div id="btn-power-boost">⚡🍏</div>
+
+        <div id="controls-right">
+            <div id="btn-puma-toggle">Puma: ✔️</div>
+
+            <div class="gang-btn active-green" id="btn-schritt" data-gang="schritt">
+                <span class="status-icon">✅</span> Schritt (5 Min)
+                <div class="bar-container"><div class="bar-fill" id="bar-schritt"></div></div>
+            </div>
+            <div class="gang-btn active-green" id="btn-trab" data-gang="trab">
+                <span class="status-icon">✅</span> Trab (2 Min)
+                <div class="bar-container"><div class="bar-fill" id="bar-trab"></div></div>
+            </div>
+            <div class="gang-btn active-green" id="btn-galopp" data-gang="galopp">
+                <span class="status-icon">✅</span> Galopp (1 Min)
+                <div class="bar-container"><div class="bar-fill" id="bar-galopp"></div></div>
+            </div>
+
+            <div id="btn-puma-attack">💣</div>
+
+            <div id="action-btn">🍎</div>
+        </div>
+    </div>
+
+    <!-- Inventory Modal -->
+    <div class="modal-bg" id="modal-bg"></div>
+    <div class="modal" id="inventory-modal">
+        <h2 class="text-3xl font-bold text-gray-800">Dein Vorrat</h2>
+        <div class="text-xs text-gray-500 mb-2">(Gelb = Belohnung vom letzten Spiel)</div>
+        <div class="fruit-grid" id="fruit-grid"></div>
+        <div class="text-left text-sm text-gray-600 mb-2 font-bold mt-2">Pferd füttern:</div>
+        <button class="heal-btn" id="heal-galopp" onclick="heal('galopp')">Galopp aufladen</button>
+        <button class="heal-btn" id="heal-trab" onclick="heal('trab')">Trab aufladen</button>
+        <button class="heal-btn" id="heal-schritt" onclick="heal('schritt')">Schritt aufladen</button>
+        <button class="mt-4 p-3 bg-blue-500 text-white rounded-xl font-bold text-lg" onclick="closeInventory()">Weiterreiten</button>
+    </div>
+
+    <!-- Win Modal -->
+    <div class="modal" id="win-modal" style="z-index: 60;">
+        <h1 class="text-4xl font-bold text-blue-500 mb-2">Ziel Erreicht!</h1>
+        <p class="text-lg text-gray-700">Dein Pegasus hat das himmlische Tor durchquert.</p>
+        <div class="text-6xl my-4">🦄☁️</div>
+        <p class="font-bold text-2xl text-green-600 mt-2">Belohnung: 50 🍎 gespeichert!</p>
+        <button class="mt-6 p-4 bg-blue-600 text-white rounded-xl font-bold text-xl shadow-lg" onclick="location.reload()">Neues Spiel starten</button>
+    </div>
+
+    <!-- Lose Modal -->
+    <div class="modal" id="lose-modal" style="z-index: 60;">
+        <h1 class="text-4xl font-bold text-red-600 mb-2">Verloren!</h1>
+        <p class="text-lg text-gray-700">Der Puma hat dich erwischt.</p>
+        <div class="text-6xl my-4">🐆💥</div>
+        <button class="mt-6 p-4 bg-red-600 text-white rounded-xl font-bold text-xl shadow-lg" onclick="location.reload()">Nochmal Versuchen</button>
+    </div>
+
+<script>
+    // === SPIEL EINSTELLUNGEN ===
+    const MAX_TIME = { galopp: 60, trab: 120, schritt: 300 };
+    const SPEEDS = { stop: 0, schritt: 8, trab: 18, galopp: 35, power: 50 }; 
+    const FRUIT_TYPES = ['🍎','🍌','🍊','🍋','🍍','🥭','🍐','🥝','🥥','🍉'];
+    const HEAL_COSTS = { galopp: 3, trab: 2, schritt: 1 };
+    let currentHealCosts = { galopp: 3, trab: 2, schritt: 1 };
+
+    // === ZEIT / TAG-NACHT SYSTEM ===
+    let gameTimeHour = 7.0; 
+    let lastGameHour = 7.0;
+    const TIME_SPEED = 0.2; 
+    const colorNight = new THREE.Color(0x0b1d3a);   
+    const colorMorning = new THREE.Color(0xffa07a); 
+    const colorDay = new THREE.Color(0x87ceeb);     
+    let isDaytime = false;
+    let isNight = false;
+
+    let celestialGroup, sunSprite, moonSprite, starMaterial;
+
+    // === BELOHNUNGSSYSTEM ===
+    const REWARD_KEY = 'fruitHorseRewards';
+    let savedRewards = [];
+    try { savedRewards = JSON.parse(localStorage.getItem(REWARD_KEY)) || []; } catch(e) {}
+    function saveRewards() { try { localStorage.setItem(REWARD_KEY, JSON.stringify(savedRewards)); } catch(e) {} }
+
+    // === PUMA & HINDERNIS VARIABLEN ===
+    let pumaEnabled = true;
+    let pumaCooldown = 5.0; 
+    let pumaActive = false;
+    let pumaRetreating = false;
+    let pumaHitsTaken = 0; 
+    let playerHitsTaken = 0; 
+    let puma;
+    let pumaLegs = [];
+    let pumaAnimTime = 0;
+    let flyingFruits = [];
+
+    let obstacles = []; // Hürden Array
+    let isJumping = false;
+    let jumpTime = 0;
+    const jumpDuration = 0.8;
+    let currentJumpHeight = 0;
+
+    // === SPIEL STATUS ===
+    let state = {
+        currentGang: 'stop',
+        times: { galopp: MAX_TIME.galopp, trab: MAX_TIME.trab, schritt: MAX_TIME.schritt },
+        active: { galopp: true, trab: true, schritt: true },
+        sessionFruits: [], 
+        inventory: savedRewards.length,
+        powerApples: 0,         
+        powerBoostTimer: 0.0    
+    };
+
+    document.getElementById('fruit-count').innerText = state.inventory;
+    if (savedRewards.length > 0) {
+        setTimeout(() => showMsg(`Willkommen zurück! Du hast ${savedRewards.length} 🍎 Belohnung!`), 1000);
+    }
+
+    // === THREE.JS SETUP ===
+    let scene, camera, renderer, horse, clock;
+    let ambientLight, dirLight;
+    let worldFruits = []; 
+    let treePositions = []; 
+    let isGameOver = false;
+    let hasTransformed = false;
+    let goalPosition = new THREE.Vector3();
+    let totalPathLength = 0; 
+    let horseMaterial; 
+    let wingL, wingR;
+    let horseAnimTime = 0;
+    let horseLegs = [];
+    let tailPivot;
+    let msgTimer = 0;
+
+    function initThreeJS() {
+        const canvas = document.getElementById('game-canvas');
+        scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(colorMorning, 30, 450);
+
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+
+        ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(100, 150, 50);
+        dirLight.castShadow = true;
+        
+        dirLight.shadow.camera.left = -150;
+        dirLight.shadow.camera.right = 150;
+        dirLight.shadow.camera.top = 150;
+        dirLight.shadow.camera.bottom = -150;
+        scene.add(dirLight);
+
+        const groundGeo = new THREE.PlaneGeometry(4000, 4000);
+        const groundMat = new THREE.MeshLambertMaterial({ color: 0x4ade80 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        celestialGroup = new THREE.Group();
+        scene.add(celestialGroup);
+
+        sunSprite = createEmojiSprite('☀️', true); 
+        sunSprite.scale.set(120, 120, 1);
+        sunSprite.position.set(0, 380, 0); 
+        celestialGroup.add(sunSprite);
+
+        moonSprite = createEmojiSprite('🌙', true); 
+        moonSprite.scale.set(120, 120, 1);
+        moonSprite.position.set(0, -380, 0); 
+        celestialGroup.add(moonSprite);
+
+        const starGeo = new THREE.BufferGeometry();
+        const starPos = [];
+        for(let i=0; i<800; i++) {
+            const u = Math.random();
+            const v = Math.random();
+            const theta = u * 2.0 * Math.PI;
+            const phi = Math.acos(2.0 * v - 1.0);
+            const r = 380;
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.sin(phi) * Math.sin(theta);
+            const z = r * Math.cos(phi);
+            starPos.push(x, y, z);
+        }
+        starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+        starMaterial = new THREE.PointsMaterial({color: 0xffffff, size: 2.5, transparent: true, opacity: 0, fog: false});
+        const stars = new THREE.Points(starGeo, starMaterial);
+        celestialGroup.add(stars);
+
+        generateWorld();
+        createHorse();
+        createBeautifulPuma(); 
+
+        clock = new THREE.Clock();
+        window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function updateDayNightCycle(delta) {
+        lastGameHour = gameTimeHour;
+        gameTimeHour += delta * TIME_SPEED;
+        if (gameTimeHour >= 24) gameTimeHour -= 24;
+
+        let h = Math.floor(gameTimeHour);
+        let m = Math.floor((gameTimeHour - h) * 60);
+        document.getElementById('clock-text').innerText = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+
+        let skyColor = new THREE.Color();
+        let lightInt = 0.8;
+        isDaytime = false;
+        isNight = false;
+
+        if (gameTimeHour >= 0 && gameTimeHour < 5) {
+            skyColor.copy(colorNight); lightInt = 0.2; isNight = true;
+        } else if (gameTimeHour >= 5 && gameTimeHour < 7) {
+            let t = (gameTimeHour - 5) / 2;
+            skyColor.lerpColors(colorNight, colorMorning, t);
+            lightInt = 0.2 + t * 0.3;
+        } else if (gameTimeHour >= 7 && gameTimeHour < 9) {
+            let t = (gameTimeHour - 7) / 2;
+            skyColor.lerpColors(colorMorning, colorDay, t);
+            lightInt = 0.5 + t * 0.5;
+        } else if (gameTimeHour >= 9 && gameTimeHour < 17) {
+            skyColor.copy(colorDay); lightInt = 1.0; isDaytime = true;
+        } else if (gameTimeHour >= 17 && gameTimeHour < 19) {
+            let t = (gameTimeHour - 17) / 2;
+            skyColor.lerpColors(colorDay, colorMorning, t);
+            lightInt = 1.0 - t * 0.5;
+        } else if (gameTimeHour >= 19 && gameTimeHour < 21) {
+            let t = (gameTimeHour - 19) / 2;
+            skyColor.lerpColors(colorMorning, colorNight, t);
+            lightInt = 0.5 - t * 0.3; isNight = true;
+        } else {
+            skyColor.copy(colorNight); lightInt = 0.2; isNight = true;
+        }
+
+        scene.background = skyColor;
+        scene.fog.color = skyColor;
+        dirLight.intensity = lightInt;
+        ambientLight.intensity = lightInt * 0.6; 
+
+        if (starMaterial) {
+            let starAlpha = 1.0 - ((lightInt - 0.2) / 0.4); 
+            starAlpha = Math.max(0, Math.min(1, starAlpha));
+            starMaterial.opacity = starAlpha;
+        }
+    }
+
+    function createElegantWing() {
+        const wingShape = new THREE.Shape();
+        wingShape.moveTo(0, 0);
+        wingShape.bezierCurveTo(1.5, 2.5, 3.5, 3.0, 5.5, 2.0); 
+        wingShape.bezierCurveTo(4.5, 1.5, 5.0, 1.0, 6.0, 0.5);   
+        wingShape.bezierCurveTo(4.0, 0.8, 4.5, 0.2, 5.2, -0.5);  
+        wingShape.bezierCurveTo(3.2, 0.0, 3.5, -0.8, 4.2, -1.2); 
+        wingShape.bezierCurveTo(2.2, -0.5, 2.5, -1.2, 3.0, -1.6);
+        wingShape.bezierCurveTo(1.5, -1.0, 0.5, -0.5, 0, 0);
+
+        const wingGeo = new THREE.ShapeGeometry(wingShape);
+        const wingMat = new THREE.MeshLambertMaterial({ color: 0xffb6c1, side: THREE.DoubleSide }); 
+        const wingMesh = new THREE.Mesh(wingGeo, wingMat);
+        wingMesh.scale.set(0.6, 0.6, 0.6);
+        return wingMesh;
+    }
+
+    function createHorse() {
+        horse = new THREE.Group();
+        horse.position.y = 1.0; 
+        
+        horseMaterial = new THREE.MeshLambertMaterial({ color: 0x111111, roughness: 0.8 }); 
+        
+        const bodyGeo = new THREE.BoxGeometry(1.4, 1.2, 3);
+        const body = new THREE.Mesh(bodyGeo, horseMaterial);
+        body.position.y = 1.8; body.castShadow = true; horse.add(body);
+
+        const neckGeo = new THREE.BoxGeometry(0.7, 1.5, 0.9);
+        const neck = new THREE.Mesh(neckGeo, horseMaterial);
+        neck.position.set(0, 2.5, 1.5); neck.rotation.x = Math.PI / 6; neck.castShadow = true; horse.add(neck);
+
+        const maneGeo = new THREE.BoxGeometry(0.2, 1.4, 0.4);
+        const mane = new THREE.Mesh(maneGeo, horseMaterial);
+        mane.position.set(0, 2.7, 1.1); mane.rotation.x = Math.PI / 6; horse.add(mane);
+
+        const headGeo = new THREE.BoxGeometry(0.6, 0.8, 1.4);
+        const head = new THREE.Mesh(headGeo, horseMaterial);
+        head.position.set(0, 3.2, 2.0); head.castShadow = true; horse.add(head);
+
+        const earGeo = new THREE.ConeGeometry(0.12, 0.4, 4);
+        const earL = new THREE.Mesh(earGeo, horseMaterial); earL.position.set(0.25, 3.7, 1.6);
+        const earR = new THREE.Mesh(earGeo, horseMaterial); earR.position.set(-0.25, 3.7, 1.6);
+        horse.add(earL); horse.add(earR);
+
+        const legGeo = new THREE.BoxGeometry(0.35, 1.6, 0.35);
+        const legPositions = [
+            {x: 0.5, y: 1.6, z: 1.1}, {x: -0.5, y: 1.6, z: 1.1},  
+            {x: 0.5, y: 1.6, z: -1.1}, {x: -0.5, y: 1.6, z: -1.1}  
+        ];
+
+        horseLegs = [];
+        for(let i=0; i<4; i++) {
+            const pivot = new THREE.Group();
+            pivot.position.set(legPositions[i].x, legPositions[i].y, legPositions[i].z);
+            const leg = new THREE.Mesh(legGeo, horseMaterial);
+            leg.position.y = -0.8; leg.castShadow = true;
+            pivot.add(leg); horse.add(pivot); horseLegs.push(pivot);
+        }
+
+        const tailGeo = new THREE.CylinderGeometry(0.05, 0.25, 1.5, 8);
+        tailPivot = new THREE.Group();
+        tailPivot.position.set(0, 1.8, -1.5);
+        const tail = new THREE.Mesh(tailGeo, horseMaterial);
+        tail.position.y = -0.75; tailPivot.rotation.x = -Math.PI / 8;
+        tailPivot.add(tail); horse.add(tailPivot);
+
+        wingL = createElegantWing(); wingL.position.set(0.8, 2.2, 0.5); wingL.rotation.y = -Math.PI / 6; wingL.rotation.x = Math.PI / 8; wingL.visible = false; horse.add(wingL);
+        wingR = createElegantWing(); wingR.position.set(-0.8, 2.2, 0.5); wingR.rotation.y = Math.PI + (Math.PI / 6); wingR.rotation.x = Math.PI / 8; wingR.visible = false; horse.add(wingR);
+
+        scene.add(horse);
+        camera.position.set(0, 5, -9); camera.lookAt(0, 2, 5); horse.add(camera);
+    }
+
+    function createBeautifulPuma() {
+        puma = new THREE.Group();
+        
+        const pumaMat = new THREE.MeshLambertMaterial({ color: 0xc87d3a, roughness: 0.9 });
+        const pumaBellyMat = new THREE.MeshLambertMaterial({ color: 0xf5deb3, roughness: 0.9 }); 
+        
+        const bodyGeo = new THREE.BoxGeometry(0.7, 0.6, 2.2);
+        const body = new THREE.Mesh(bodyGeo, pumaMat);
+        body.position.y = 1.0; body.castShadow = true;
+        puma.add(body);
+        
+        const headGeo = new THREE.BoxGeometry(0.6, 0.6, 0.7);
+        const head = new THREE.Mesh(headGeo, pumaMat);
+        head.position.set(0, 1.4, 1.2); head.castShadow = true;
+        puma.add(head);
+
+        const snoutGeo = new THREE.BoxGeometry(0.35, 0.3, 0.4);
+        const snout = new THREE.Mesh(snoutGeo, pumaBellyMat);
+        snout.position.set(0, 1.25, 1.6); snout.castShadow = true;
+        puma.add(snout);
+
+        const earGeo = new THREE.ConeGeometry(0.12, 0.25, 4);
+        const earL = new THREE.Mesh(earGeo, pumaMat); earL.position.set(0.2, 1.75, 1.0);
+        const earR = new THREE.Mesh(earGeo, pumaMat); earR.position.set(-0.2, 1.75, 1.0);
+        puma.add(earL); puma.add(earR);
+
+        const legGeo = new THREE.BoxGeometry(0.2, 1.0, 0.2);
+        const legPos = [
+            {x: 0.3, y: 1.0, z: 0.8}, {x: -0.3, y: 1.0, z: 0.8},
+            {x: 0.3, y: 1.0, z: -0.8}, {x: -0.3, y: 1.0, z: -0.8}
+        ];
+        
+        pumaLegs = [];
+        for(let i=0; i<4; i++) {
+            const pivot = new THREE.Group();
+            pivot.position.set(legPos[i].x, legPos[i].y, legPos[i].z);
+            const leg = new THREE.Mesh(legGeo, pumaMat);
+            leg.position.y = -0.5; leg.castShadow = true;
+            pivot.add(leg); puma.add(pivot); pumaLegs.push(pivot);
+        }
+
+        const tailGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.2, 8);
+        const tail = new THREE.Mesh(tailGeo, pumaMat);
+        tail.position.set(0, 1.2, -1.4); tail.rotation.x = -Math.PI/4;
+        puma.add(tail);
+
+        puma.visible = false;
+        scene.add(puma);
+    }
+
+    function spawnPuma() {
+        const angleOffset = (Math.random() - 0.5) * (Math.PI / 3); 
+        const dist = 80; 
+
+        puma.position.x = horse.position.x + Math.sin(horse.rotation.y + angleOffset) * dist;
+        puma.position.z = horse.position.z + Math.cos(horse.rotation.y + angleOffset) * dist;
+        puma.position.y = 0;
+        
+        puma.lookAt(horse.position.x, 0, horse.position.z);
+        
+        puma.visible = true;
+        pumaActive = true;
+        pumaHitsTaken = 0;
+        pumaRetreating = false;
+
+        document.getElementById('btn-puma-attack').classList.add('active-purple');
+        showMsg("Ein Puma greift an! Wehre dich (💣) oder renne!");
+    }
+
+    function createEmojiSprite(emoji, ignoreFog = false) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 128; canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        ctx.shadowColor = "rgba(0,0,0,0.3)"; ctx.shadowBlur = 10;
+        ctx.font = '90px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(emoji, 64, 64 + 10); 
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ map: texture, transparent: true, fog: !ignoreFog });
+        const sprite = new THREE.Sprite(material);
+        sprite.scale.set(4, 4, 1); 
+        return sprite;
+    }
+
+    function generateWorld() {
+        const colors = [0xff0000, 0xff7f00, 0xffff00, 0x00ff00, 0x0000ff, 0x4b0082, 0x9400d3];
+        const numPathPoints = 800; 
+        const pathSpacing = 8;
+        totalPathLength = numPathPoints * pathSpacing;
+        treePositions = []; 
+
+        let currentZ = 0;
+        
+        for(let i = 0; i < numPathPoints; i++) {
+            currentZ += pathSpacing;
+            const x = Math.sin(i * 0.1) * 40 + Math.sin(i * 0.03) * 30;
+            const pathGeo = new THREE.PlaneGeometry(5, 5);
+            const pathMat = new THREE.MeshBasicMaterial({ color: colors[i % colors.length] });
+            const pathPiece = new THREE.Mesh(pathGeo, pathMat);
+            pathPiece.rotation.x = -Math.PI / 2;
+            pathPiece.position.set(x, 0.05, currentZ);
+            scene.add(pathPiece);
+
+            if (Math.random() < 0.08 && i > 5) spawnFruitNear(x, currentZ);
+            if (i === numPathPoints - 1) {
+                goalPosition.set(x, 0, currentZ);
+                createGoal(x, currentZ);
+            }
+        }
+
+        // === DIE 4 HINDERNISSE (Hürden) AUF DEM WEG ===
+        const fenceMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 }); // Holz-Braun
+        const obstacleIndices = [150, 300, 450, 600]; // Verteilt auf der Wiese
+        
+        for (let idx of obstacleIndices) {
+            const z = idx * pathSpacing;
+            const x = Math.sin(idx * 0.1) * 40 + Math.sin(idx * 0.03) * 30;
+            const nextZ = (idx+1) * pathSpacing;
+            const nextX = Math.sin((idx+1) * 0.1) * 40 + Math.sin((idx+1) * 0.03) * 30;
+
+            const fence = new THREE.Group();
+            
+            // Pfosten
+            const postGeo = new THREE.CylinderGeometry(0.3, 0.3, 3.5);
+            const p1 = new THREE.Mesh(postGeo, fenceMat); p1.position.set(-4.5, 1.75, 0); p1.castShadow = true;
+            const p2 = new THREE.Mesh(postGeo, fenceMat); p2.position.set(4.5, 1.75, 0); p2.castShadow = true;
+            
+            // Bretter quer
+            const plankGeo = new THREE.BoxGeometry(10, 0.4, 0.2);
+            const pl1 = new THREE.Mesh(plankGeo, fenceMat); pl1.position.set(0, 2.5, 0); pl1.castShadow = true;
+            const pl2 = new THREE.Mesh(plankGeo, fenceMat); pl2.position.set(0, 1.3, 0); pl2.castShadow = true;
+            
+            fence.add(p1); fence.add(p2); fence.add(pl1); fence.add(pl2);
+            fence.position.set(x, 0, z);
+            fence.lookAt(nextX, 0, nextZ); // Richtig in Pfadrichtung drehen
+            fence.visible = false; // Startet versteckt (Taucht nur auf, wenn man >= 2 Obst hat)
+            scene.add(fence);
+
+            obstacles.push({ mesh: fence, active: false, cleared: false, x: x, z: z });
+        }
+
+
+        // Bäume
+        const treeCount = 800;
+        const trunkGeo = new THREE.CylinderGeometry(0.8, 1.2, 4);
+        const leavesGeo = new THREE.ConeGeometry(4, 10, 8);
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5c4033 }); 
+        const leavesMat = new THREE.MeshLambertMaterial({ color: 0x228b22 }); 
+
+        const trunkMesh = new THREE.InstancedMesh(trunkGeo, trunkMat, treeCount);
+        const leavesMesh = new THREE.InstancedMesh(leavesGeo, leavesMat, treeCount);
+        
+        const dummy = new THREE.Object3D();
+        let availableTreePositions = [];
+
+        for(let i=0; i<treeCount; i++) {
+            const z = Math.random() * totalPathLength;
+            const pathX = Math.sin((z/pathSpacing) * 0.1) * 40 + Math.sin((z/pathSpacing) * 0.03) * 30;
+            let x = (Math.random() - 0.5) * 600;
+            if (Math.abs(x - pathX) < 25) x += 35 * Math.sign(x - pathX || 1); 
+
+            dummy.position.set(x, 2, z); dummy.scale.set(1, 1, 1); dummy.updateMatrix();
+            trunkMesh.setMatrixAt(i, dummy.matrix);
+            dummy.position.set(x, 8, z); dummy.updateMatrix();
+            leavesMesh.setMatrixAt(i, dummy.matrix);
+            
+            treePositions.push({ x: x, z: z });
+            availableTreePositions.push({ x: x, z: z, pathX: pathX });
+        }
+        trunkMesh.castShadow = true; leavesMesh.castShadow = true;
+        scene.add(trunkMesh); scene.add(leavesMesh);
+
+        // 5 POWER-ÄPFEL HINTER BÄUMEN
+        for(let i=0; i<5; i++) {
+            if(availableTreePositions.length === 0) break;
+            let idx = Math.floor(Math.random() * availableTreePositions.length);
+            let tree = availableTreePositions.splice(idx, 1)[0];
+            
+            let pX = tree.x + (tree.x > tree.pathX ? 8 : -8);
+            let pZ = tree.z + (Math.random() - 0.5) * 5;
+            
+            const powerApple = createEmojiSprite('🍏', true);
+            powerApple.scale.set(7, 7, 1); 
+            powerApple.position.set(pX, 3, pZ);
+            powerApple.userData = { type: '🍏', isPowerApple: true, isMagicFruit: false };
+            scene.add(powerApple);
+            worldFruits.push(powerApple);
+
+            const pLight = new THREE.PointLight(0x22c55e, 1.5, 20);
+            pLight.position.set(pX, 5, pZ);
+            scene.add(pLight);
+        }
+
+        const cloudCount = 200;
+        const cloudGeo = new THREE.SphereGeometry(8, 8, 8);
+        const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
+        const cloudMesh = new THREE.InstancedMesh(cloudGeo, cloudMat, cloudCount * 4); 
+        let cloudIdx = 0;
+        for(let i=0; i<cloudCount; i++) {
+            const cx = (Math.random() - 0.5) * 800;
+            const cy = 60 + Math.random() * 80; 
+            const cz = Math.random() * totalPathLength;
+            for(let j=0; j<4; j++) {
+                dummy.position.set(cx + (Math.random()-0.5)*12, cy + (Math.random()-0.5)*6, cz + (Math.random()-0.5)*12);
+                const scale = 0.5 + Math.random(); dummy.scale.set(scale, scale, scale); dummy.updateMatrix();
+                cloudMesh.setMatrixAt(cloudIdx++, dummy.matrix);
+            }
+        }
+        scene.add(cloudMesh);
+    }
+
+    function spawnFruitNear(baseX, baseZ) {
+        const type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+        const fruitSprite = createEmojiSprite(type);
+        const offsetDirection = Math.random() > 0.5 ? 1 : -1;
+        const offsetX = offsetDirection * (4 + Math.random() * 12); 
+        const offsetZ = (Math.random() - 0.5) * 10;
+        fruitSprite.position.set(baseX + offsetX, 2, baseZ + offsetZ); 
+        fruitSprite.userData = { type: type, isPowerApple: false, isMagicFruit: false };
+        scene.add(fruitSprite);
+        worldFruits.push(fruitSprite);
+    }
+
+    function createGoal(x, z) {
+        const goalGroup = new THREE.Group();
+        const pillarGeo = new THREE.CylinderGeometry(2, 2, 20, 16);
+        const whiteMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x87ceeb, emissiveIntensity: 0.5 }); 
+        const p1 = new THREE.Mesh(pillarGeo, whiteMat); p1.position.set(-10, 10, 0);
+        const p2 = new THREE.Mesh(pillarGeo, whiteMat); p2.position.set(10, 10, 0);
+        const topGeo = new THREE.BoxGeometry(24, 3, 4);
+        const top = new THREE.Mesh(topGeo, whiteMat); top.position.set(0, 20, 0);
+
+        const cloudGeo = new THREE.SphereGeometry(4, 16, 16);
+        const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+        for(let i=0; i<15; i++) {
+            const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+            cloud.position.set((Math.random()-0.5)*35, 20 + Math.random()*5, (Math.random()-0.5)*5);
+            goalGroup.add(cloud);
+        }
+        goalGroup.add(p1); goalGroup.add(p2); goalGroup.add(top);
+        goalGroup.position.set(x, 0, z);
+        scene.add(goalGroup);
+
+        const gateLight = new THREE.PointLight(0x00bfff, 3, 100);
+        gateLight.position.set(x, 15, z);
+        scene.add(gateLight);
+
+        // Das magische Pegasus Obst (LINKS vom Tor)
+        const type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+        const magicFruit = createEmojiSprite(type);
+        magicFruit.scale.set(7, 7, 1); 
+        magicFruit.position.set(x - 12, 3, z + 5); 
+        magicFruit.userData = { type: type, isPowerApple: false, isMagicFruit: true };
+        scene.add(magicFruit);
+        worldFruits.push(magicFruit);
+
+        const magicLight = new THREE.PointLight(0xffd700, 2, 20);
+        magicLight.position.set(x - 12, 5, z + 5);
+        scene.add(magicLight);
+    }
+
+    function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    // === JOYSTICK ===
+    let joystickData = { active: false, x: 0, y: 0 };
+    const zone = document.getElementById('joystick-zone');
+    const knob = document.getElementById('joystick-knob');
+    let zoneCenter = { x: 0, y: 0 };
+
+    zone.addEventListener('pointerdown', (e) => {
+        joystickData.active = true;
+        const rect = zone.getBoundingClientRect();
+        zoneCenter.x = rect.left + rect.width / 2;
+        zoneCenter.y = rect.top + rect.height / 2;
+        handleJoystickMove(e);
+        zone.setPointerCapture(e.pointerId);
+    });
+    
+    zone.addEventListener('pointermove', (e) => { if(joystickData.active) handleJoystickMove(e); });
+    zone.addEventListener('pointerup', (e) => {
+        joystickData.active = false; joystickData.x = 0; joystickData.y = 0;
+        knob.style.transform = `translate(0px, 0px)`;
+        zone.releasePointerCapture(e.pointerId);
+    });
+
+    function handleJoystickMove(e) {
+        let dx = e.clientX - zoneCenter.x; let dy = e.clientY - zoneCenter.y;
+        const maxDist = 40; const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist > maxDist) { dx = (dx / dist) * maxDist; dy = (dy / dist) * maxDist; }
+        knob.style.transform = `translate(${dx}px, ${dy}px)`;
+        joystickData.x = dx / maxDist; joystickData.y = dy / maxDist; 
+    }
+
+    // === UI & LOGIK ===
+    function setGang(gang) {
+        if (state.active[gang]) {
+            state.currentGang = gang;
+            ['schritt', 'trab', 'galopp'].forEach(g => {
+                const el = document.getElementById(`btn-${g}`);
+                if (state.active[g]) {
+                    el.style.transform = (g === gang) ? 'scale(1.05)' : 'scale(1)';
+                    el.style.boxShadow = (g === gang) ? '0 0 15px rgba(74, 222, 128, 0.8)' : '0 4px 6px rgba(0,0,0,0.2)';
+                }
+            });
+        } else {
+            showMsg(`${gang.charAt(0).toUpperCase() + gang.slice(1)} muss erst gefüttert werden!`);
+        }
+    }
+
+    function deactivateGangUI(gang) {
+        state.active[gang] = false;
+        const btn = document.getElementById(`btn-${gang}`);
+        btn.classList.remove('active-green');
+        btn.classList.add('inactive-blue');
+        btn.querySelector('.status-icon').innerText = '❎';
+        btn.style.transform = 'scale(1)'; btn.style.boxShadow = 'none';
+    }
+
+    function autoDowngradeGang(exhaustedGang, prefixMsg) {
+        let msg = prefixMsg;
+        let newGang = 'stop';
+        if (exhaustedGang === 'galopp') {
+            if (state.active['trab']) newGang = 'trab';
+            else if (state.active['schritt']) newGang = 'schritt';
+        } else if (exhaustedGang === 'trab') {
+            if (state.active['schritt']) newGang = 'schritt';
+        }
+        
+        if (newGang !== 'stop') {
+            setGang(newGang); 
+            msg += ` -> Automatisch auf ${newGang.charAt(0).toUpperCase() + newGang.slice(1)}.`;
+        } else {
+            state.currentGang = 'stop';
+            msg += ` Pferd stoppt.`;
+            ['schritt', 'trab', 'galopp'].forEach(g => {
+                const el = document.getElementById(`btn-${g}`);
+                if (state.active[g]) { el.style.transform = 'scale(1)'; el.style.boxShadow = '0 4px 6px rgba(0,0,0,0.2)'; }
+            });
+        }
+        showMsg(msg);
+    }
+
+    ['schritt', 'trab', 'galopp'].forEach(g => {
+        document.getElementById(`btn-${g}`).addEventListener('click', () => setGang(g));
+    });
+
+    const btnPumaToggle = document.getElementById('btn-puma-toggle');
+    btnPumaToggle.addEventListener('click', () => {
+        pumaEnabled = !pumaEnabled;
+        if (pumaEnabled) {
+            btnPumaToggle.innerHTML = "Puma: ✔️";
+            btnPumaToggle.classList.remove('off');
+            showMsg("Der Puma kann wieder kommen.");
+        } else {
+            btnPumaToggle.innerHTML = "Puma: ❌";
+            btnPumaToggle.classList.add('off');
+            showMsg("Der Puma wird dich nicht mehr jagen!");
+            if (pumaActive) {
+                pumaRetreating = true;
+                pumaHitsTaken = 1; 
+            }
+        }
+    });
+
+    const btnPumaAttack = document.getElementById('btn-puma-attack');
+    btnPumaAttack.addEventListener('pointerdown', () => {
+        if (pumaActive && state.inventory > 0 && !pumaRetreating) {
+            consumeFruit(1);
+            let proj = createEmojiSprite('🍎');
+            proj.position.copy(horse.position);
+            proj.position.y += 2; 
+            flyingFruits.push({mesh: proj, target: puma});
+            scene.add(proj);
+        } else if (!pumaActive) {
+            showMsg("Es ist kein Puma da!");
+        } else if (state.inventory === 0) {
+            showMsg("Du hast kein Obst mehr zum Werfen!");
+        }
+    });
+
+    const btnPowerBoost = document.getElementById('btn-power-boost');
+    btnPowerBoost.addEventListener('pointerdown', () => {
+        if (state.powerApples > 0 && state.powerBoostTimer <= 0) {
+            state.powerApples--;
+            document.getElementById('power-count').innerText = state.powerApples;
+            if (state.powerApples === 0) btnPowerBoost.classList.remove('has-power');
+            
+            state.powerBoostTimer = 120.0; 
+            document.getElementById('power-bar-box').style.display = 'block';
+            showMsg("⚡ POWER-SPRINT AKTIVIERT! (Hält 2 Minuten)");
+        }
+    });
+
+
+    function consumeFruit(amount) {
+        for(let i=0; i<amount; i++) {
+            if (state.sessionFruits.length > 0) state.sessionFruits.shift(); 
+            else if (savedRewards.length > 0) { savedRewards.shift(); saveRewards(); }
+        }
+        state.inventory -= amount;
+        document.getElementById('fruit-count').innerText = state.inventory;
+    }
+
+    const actionBtn = document.getElementById('action-btn');
+    let pressTimer;
+    let isLongPress = false;
+
+    actionBtn.addEventListener('pointerdown', (e) => {
+        isLongPress = false;
+        actionBtn.setPointerCapture(e.pointerId);
+        actionBtn.style.transform = "scale(0.9)";
+        pressTimer = setTimeout(() => { isLongPress = true; openInventory(); }, 400); 
+    });
+
+    actionBtn.addEventListener('pointerup', (e) => {
+        clearTimeout(pressTimer);
+        actionBtn.style.transform = "scale(1)";
+        if (!isLongPress && !document.getElementById('inventory-modal').classList.contains('show')) collectFruit();
+        actionBtn.releasePointerCapture(e.pointerId);
+    });
+
+    function collectFruit() {
+        if(!horse) return;
+        let collected = false;
+        for (let i = worldFruits.length - 1; i >= 0; i--) {
+            const fruit = worldFruits[i];
+            if (horse.position.distanceTo(fruit.position) < 14) { 
+                
+                if (fruit.userData.isMagicFruit) {
+                    transformToPegasus();
+                } else if (fruit.userData.isPowerApple) {
+                    state.powerApples++;
+                    document.getElementById('power-count').innerText = state.powerApples;
+                    btnPowerBoost.classList.add('has-power');
+                    showMsg("🍏 Power-Apfel gefunden!");
+                } else {
+                    state.sessionFruits.push(fruit.userData.type);
+                    state.inventory++;
+                    document.getElementById('fruit-count').innerText = state.inventory;
+                    showMsg(`${fruit.userData.type} Eingesammelt!`);
+                }
+                
+                scene.remove(fruit); worldFruits.splice(i, 1);
+                collected = true; break; 
+            }
+        }
+        if(!collected) showMsg("Kein Obst in der Nähe!");
+    }
+
+    function transformToPegasus() {
+        if (hasTransformed) return;
+        hasTransformed = true;
+        horseMaterial.color.setHex(0xffffff); 
+        wingL.visible = true; wingR.visible = true;
+        showMsg("✨ Magisches Obst gegessen! Du bist ein Pegasus! ✨");
+        if (pumaActive) {
+            pumaRetreating = true;
+            pumaHitsTaken = 1;
+            document.getElementById('btn-puma-attack').classList.remove('active-purple');
+        }
+    }
+
+    function showMsg(text) {
+        const msgBox = document.getElementById('msg-box');
+        msgBox.innerText = text;
+        msgBox.style.opacity = '1';
+        setTimeout(() => msgBox.style.opacity = '0', 3500);
+    }
+
+    function loseGame() {
+        isGameOver = true;
+        document.getElementById('modal-bg').classList.add('show');
+        document.getElementById('lose-modal').classList.add('show');
+    }
+
+    // === INVENTAR / FÜTTERN ===
+    function openInventory() {
+        document.getElementById('modal-bg').classList.add('show');
+        document.getElementById('inventory-modal').classList.add('show');
+        const grid = document.getElementById('fruit-grid');
+        grid.innerHTML = '';
+        if(state.inventory === 0) grid.innerHTML = '<div class="w-full text-center text-gray-500 py-4">Vorrat ist leer.</div>';
+        else {
+            savedRewards.forEach(fruit => {
+                const el = document.createElement('div'); el.className = 'fruit-item reward'; el.innerText = fruit; grid.appendChild(el);
+            });
+            state.sessionFruits.forEach(fruit => {
+                const el = document.createElement('div'); el.className = 'fruit-item'; el.innerText = fruit; grid.appendChild(el);
+            });
+        }
+        updateHealButtons();
+    }
+
+    function closeInventory() {
+        document.getElementById('modal-bg').classList.remove('show');
+        document.getElementById('inventory-modal').classList.remove('show');
+    }
+
+    function updateHealButtons() {
+        ['galopp', 'trab', 'schritt'].forEach(g => {
+            const btn = document.getElementById(`heal-${g}`);
+            const cost = currentHealCosts[g];
+            btn.innerText = `${g.charAt(0).toUpperCase() + g.slice(1)} aufladen (${cost} Obst)`;
+            btn.disabled = !(!state.active[g] && state.inventory >= cost);
+        });
+    }
+
+    window.heal = function(gang) {
+        const cost = currentHealCosts[gang];
+        if (!state.active[gang] && state.inventory >= cost) {
+            consumeFruit(cost);
+            state.times[gang] = MAX_TIME[gang];
+            state.active[gang] = true;
+            currentHealCosts[gang] = HEAL_COSTS[gang];
+            
+            const btn = document.getElementById(`btn-${gang}`);
+            btn.classList.remove('inactive-blue');
+            btn.classList.add('active-green');
+            btn.querySelector('.status-icon').innerText = '✅';
+            document.getElementById(`bar-${gang}`).style.width = '100%';
+            
+            showMsg(`${gang.toUpperCase()} ist wieder fit!`);
+            openInventory(); 
+        }
+    }
+
+    function winGame() {
+        isGameOver = true;
+        for(let i=0; i<50; i++) savedRewards.push('🍎');
+        saveRewards();
+        document.getElementById('modal-bg').classList.add('show');
+        document.getElementById('win-modal').classList.add('show');
+    }
+
+    // === GAME LOOP ===
+    function animate() {
+        requestAnimationFrame(animate);
+        if (isGameOver || !horse) return;
+
+        const delta = Math.min(clock.getDelta(), 0.1); 
+        const time = clock.getElapsedTime();
+
+        updateDayNightCycle(delta);
+
+        if (celestialGroup) {
+            celestialGroup.position.x = horse.position.x;
+            celestialGroup.position.z = horse.position.z;
+            celestialGroup.rotation.z = -(gameTimeHour - 12) * (Math.PI / 12);
+        }
+
+        const isInventoryOpen = document.getElementById('inventory-modal').classList.contains('show');
+
+        // Puma Logik pausiert, wenn Inventar offen ist
+        if (!isInventoryOpen) {
+            if (pumaCooldown > 0) {
+                pumaCooldown -= delta; 
+            }
+
+            if (pumaEnabled && isNight && !pumaActive && !hasTransformed && state.inventory >= 5 && pumaCooldown <= 0) {
+                if (Math.random() < 0.02) { 
+                    spawnPuma();
+                    pumaCooldown = 5.0; 
+                }
+            }
+
+            if (pumaActive) {
+                let distToHorse = puma.position.distanceTo(horse.position);
+                
+                if (!pumaRetreating) {
+                    puma.lookAt(horse.position.x, 0, horse.position.z);
+                    
+                    puma.translateZ(38 * delta); 
+                    pumaAnimTime += delta * 38 * 0.5;
+                    pumaLegs[0].rotation.x = Math.sin(pumaAnimTime) * 0.9;
+                    pumaLegs[1].rotation.x = Math.sin(pumaAnimTime) * 0.9;
+                    pumaLegs[2].rotation.x = Math.sin(pumaAnimTime - 1.5) * 0.9;
+                    pumaLegs[3].rotation.x = Math.sin(pumaAnimTime - 1.5) * 0.9;
+                    
+                    if (distToHorse < 4 && !isJumping) {
+                        playerHitsTaken++;
+                        document.getElementById('health-hud').style.display = 'block';
+                        document.getElementById('player-hits').innerText = playerHitsTaken;
+
+                        if (playerHitsTaken >= 3) {
+                            loseGame();
+                        } else {
+                            showMsg(`ACHTUNG! Puma hat dich erwischt! (${playerHitsTaken}/3)`);
+                            pumaRetreating = true; 
+                            pumaCooldown = 5.0; 
+                            document.getElementById('btn-puma-attack').classList.remove('active-purple');
+                            puma.rotation.y += Math.PI; 
+                        }
+                    }
+                } else {
+                    puma.translateZ(45 * delta); 
+                    pumaAnimTime += delta * 45 * 0.5;
+                    pumaLegs[0].rotation.x = Math.sin(pumaAnimTime) * 0.9;
+                    pumaLegs[1].rotation.x = Math.sin(pumaAnimTime) * 0.9;
+                    pumaLegs[2].rotation.x = Math.sin(pumaAnimTime - 1.5) * 0.9;
+                    pumaLegs[3].rotation.x = Math.sin(pumaAnimTime - 1.5) * 0.9;
+                    
+                    if (distToHorse > 90) {
+                        puma.visible = false;
+                        pumaActive = false;
+                        pumaRetreating = false;
+                        document.getElementById('btn-puma-attack').classList.remove('active-purple');
+                    }
+                }
+            }
+
+            for(let i=flyingFruits.length-1; i>=0; i--) {
+                let p = flyingFruits[i];
+                p.mesh.lookAt(p.target.position.x, 1, p.target.position.z);
+                p.mesh.translateZ(50 * delta); 
+                if (p.mesh.position.distanceTo(p.target.position) < 4.0) {
+                    scene.remove(p.mesh);
+                    flyingFruits.splice(i, 1);
+                    
+                    if (!pumaRetreating) {
+                        pumaRetreating = true;
+                        pumaCooldown = 5.0; 
+                        document.getElementById('btn-puma-attack').classList.remove('active-purple');
+                        showMsg("Treffer! Der Puma zieht sich zurück!");
+                        puma.rotation.y += Math.PI; 
+                    }
+                }
+            }
+        } 
+
+        // === PFERDE BEWEGUNG & KOLLISION ===
+        
+        if (state.powerBoostTimer > 0) {
+            state.powerBoostTimer -= delta;
+            let pct = (state.powerBoostTimer / 120.0) * 100;
+            document.getElementById('power-bar-fill').style.width = pct + '%';
+            
+            if (state.powerBoostTimer <= 0) {
+                document.getElementById('power-bar-box').style.display = 'none';
+                showMsg("Power-Sprint beendet!");
+            }
+        }
+
+        // --- SPRUNG-LOGIK UPDATE ---
+        if (isJumping) {
+            jumpTime += delta;
+            let progress = jumpTime / jumpDuration;
+            // Parabel für den Sprung
+            currentJumpHeight = Math.sin(progress * Math.PI) * 4.5; 
+            
+            if (jumpTime >= jumpDuration) {
+                isJumping = false;
+                currentJumpHeight = 0;
+            }
+        } else {
+            currentJumpHeight = 0;
+        }
+
+        if (joystickData.active || state.currentGang !== 'stop') {
+            if (joystickData.x !== 0) {
+                const turnSpeed = state.currentGang === 'stop' ? 1.5 : (SPEEDS[state.currentGang] / 8);
+                horse.rotation.y -= joystickData.x * turnSpeed * delta; 
+            }
+
+            if (joystickData.y < -0.1 && state.currentGang !== 'stop') {
+                
+                let speed = SPEEDS[state.currentGang];
+                let isBoosting = state.powerBoostTimer > 0;
+                if (isBoosting) speed = SPEEDS.power; 
+
+                horse.translateZ(speed * delta);
+                
+                // === HINDERNIS (HÜRDEN) KOLLISION ===
+                for(let obs of obstacles) {
+                    let distToObs = horse.position.distanceTo(obs.mesh.position);
+                    
+                    // Sichtbar machen (Spawn-Check), wenn nah genug und Inventar >= 2
+                    if (!obs.active && !obs.cleared && distToObs < 60 && state.inventory >= 2) {
+                        obs.active = true;
+                        obs.mesh.visible = true;
+                    }
+                    
+                    // Kollision / Sprung
+                    if (obs.active && distToObs < 4.5 && !isJumping) {
+                        if (!obs.cleared) {
+                            if (state.currentGang === 'galopp' || isBoosting) {
+                                // Jump einleiten
+                                isJumping = true; 
+                                jumpTime = 0;
+                                obs.cleared = true; // Einmal geschafft = immer frei
+                                
+                                if (!isBoosting) {
+                                    consumeFruit(1);
+                                    showMsg("🚧 Hindernis übersprungen! (-1 🍎)");
+                                } else {
+                                    showMsg("🚀 Super-Sprung! Kostet kein Obst!");
+                                }
+                            } else {
+                                // Blockieren, zu langsam!
+                                horse.translateZ(-4); 
+                                deactivateGangUI(state.currentGang);
+                                state.currentGang = 'stop'; 
+                                showMsg("🛑 Hindernis! Du brauchst Galopp oder den Supermodus zum Springen!");
+                                ['schritt', 'trab', 'galopp'].forEach(g => {
+                                    if (state.active[g]) { document.getElementById(`btn-${g}`).style.transform = 'scale(1)'; document.getElementById(`btn-${g}`).style.boxShadow = 'none'; }
+                                });
+                            }
+                        } else {
+                            // Bereits geknackt, springt automatisch und kostenlos!
+                            isJumping = true;
+                            jumpTime = 0;
+                        }
+                    }
+                }
+
+                // === NORMALE BÄUME KOLLISION (Ignorieren, wenn in der Luft) ===
+                let hitTree = false;
+                if (!isJumping) {
+                    for(let i=0; i<treePositions.length; i++) {
+                        const dx = horse.position.x - treePositions[i].x;
+                        const dz = horse.position.z - treePositions[i].z;
+                        if (Math.abs(dz) < 4 && Math.abs(dx) < 4) {
+                            if (Math.sqrt(dx*dx + dz*dz) < 2.5) { hitTree = true; break; }
+                        }
+                    }
+                }
+
+                if (hitTree) {
+                    horse.translateZ(-4); 
+                    const gang = state.currentGang;
+                    if (gang === 'galopp') {
+                        currentHealCosts.galopp = 2; deactivateGangUI('galopp');
+                        showMsg("💥 Baum! Galopp gebrochen (Kostet 2 🍎)");
+                    } else if (gang === 'trab') {
+                        currentHealCosts.trab = 1; deactivateGangUI('trab');
+                        showMsg("💥 Baum! Trab gebrochen (Kostet 1 🍎)");
+                    } else if (gang === 'schritt') {
+                        showMsg("💥 Autsch, ein Baum! (Kostet 0 🍎)");
+                    }
+                    state.currentGang = 'stop'; 
+                    ['schritt', 'trab', 'galopp'].forEach(g => {
+                        if (state.active[g]) { document.getElementById(`btn-${g}`).style.transform = 'scale(1)'; document.getElementById(`btn-${g}`).style.boxShadow = 'none'; }
+                    });
+
+                } else {
+                    if (!isBoosting) {
+                        state.times[state.currentGang] -= delta;
+                        const percent = Math.max(0, (state.times[state.currentGang] / MAX_TIME[state.currentGang]) * 100);
+                        document.getElementById(`bar-${state.currentGang}`).style.width = `${percent}%`;
+
+                        if (state.times[state.currentGang] <= 0) {
+                            const exhausted = state.currentGang;
+                            currentHealCosts[exhausted] = HEAL_COSTS[exhausted]; 
+                            deactivateGangUI(exhausted);
+                            autoDowngradeGang(exhausted, `${exhausted.toUpperCase()} ist erschöpft!`);
+                        }
+                    }
+                }
+
+                // Animation der Beine (und Körperhöhe bestimmen)
+                horseAnimTime += delta * speed * 0.5;
+                let baseY = 1.0;
+
+                if (state.currentGang === 'galopp' || isBoosting) {
+                    horseLegs[0].rotation.x = Math.sin(horseAnimTime) * 0.9;
+                    horseLegs[1].rotation.x = Math.sin(horseAnimTime) * 0.9;
+                    horseLegs[2].rotation.x = Math.sin(horseAnimTime - 1.5) * 0.9;
+                    horseLegs[3].rotation.x = Math.sin(horseAnimTime - 1.5) * 0.9;
+                    baseY = 1.0 + Math.sin(horseAnimTime * 2) * 0.2;
+                } else if (state.currentGang === 'trab' || state.currentGang === 'schritt') {
+                    const amp = state.currentGang === 'trab' ? 0.7 : 0.4;
+                    horseLegs[0].rotation.x = Math.sin(horseAnimTime) * amp;
+                    horseLegs[1].rotation.x = Math.sin(horseAnimTime + Math.PI) * amp;
+                    horseLegs[2].rotation.x = Math.sin(horseAnimTime + Math.PI) * amp;
+                    horseLegs[3].rotation.x = Math.sin(horseAnimTime) * amp;
+                    baseY = 1.0 + Math.sin(horseAnimTime * 2) * (amp * 0.15);
+                }
+
+                // Position kombiniert Wippen + Sprunghöhe
+                horse.position.y = baseY + currentJumpHeight;
+
+                tailPivot.rotation.z = Math.sin(horseAnimTime * 0.8) * 0.15;
+                tailPivot.rotation.x = -Math.PI / 8 + Math.sin(horseAnimTime * 2) * 0.1;
+            } else { returnLegsToNormal(); }
+        } else { returnLegsToNormal(); }
+
+        function returnLegsToNormal() {
+            horseLegs.forEach(leg => leg.rotation.x *= 0.9);
+            // Auch im Stand kann der Sprung abklingen
+            horse.position.y += ((1.0 + currentJumpHeight) - horse.position.y) * 0.2; 
+            tailPivot.rotation.z *= 0.9;
+            tailPivot.rotation.x += (-Math.PI / 8 - tailPivot.rotation.x) * 0.1;
+        }
+
+        const distToGoal = horse.position.distanceTo(goalPosition);
+        const currentProgress = Math.min(100, Math.max(0, 100 - (distToGoal / totalPathLength) * 100));
+        document.getElementById('progress-bar-fill').style.width = `${currentProgress}%`;
+
+        if (hasTransformed) {
+            const flapSpeed = (state.currentGang !== 'stop' || state.powerBoostTimer > 0) ? 12 : 4;
+            const flapAngle = Math.sin(time * flapSpeed) * 0.4;
+            wingL.rotation.z = flapAngle;
+            wingR.rotation.z = flapAngle;
+        }
+
+        if (distToGoal < 15) {
+            if (hasTransformed && gameTimeHour >= 11.0 && gameTimeHour <= 13.0) {
+                winGame();
+            } else { 
+                horse.translateZ(-5); 
+                msgTimer -= delta; 
+                if (msgTimer <= 0) { 
+                    if (!hasTransformed) {
+                        showMsg("Sammle zuerst das magische Obst links neben dem Tor ein!"); 
+                    } else {
+                        showMsg("Das Tor öffnet sich nur zwischen 11:00 und 13:00 Uhr!"); 
+                    }
+                    msgTimer = 4.0; 
+                } 
+            }
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    window.onload = function() {
+        initThreeJS();
+        setGang('schritt');
+        animate();
+    }
+
+</script>
+</body>
+</html>
+
+
+```
