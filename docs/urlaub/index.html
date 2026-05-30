@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="de"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mr. Lemurs Ferienreise</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #87CEEB; touch-action: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #gameCanvas { display: block; width: 100%; height: 100vh; }
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .ui-content { pointer-events: auto; background: rgba(255, 255, 255, 0.95); padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.2); max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;}
+        .hidden { display: none !important; }
+        button { transition: transform 0.1s; cursor: pointer; }
+        button:active { transform: scale(0.95); }
+        
+        /* Mobile Controls */
+        #mobileControls {RESOLVE_NEW_FIREBASE_TOKEN
+            position: absolute; bottom: 20px; left: 0; width: 100%; display: none; justify-content: space-between; padding: 0 40px; pointer-events: none;
+        }
+        .control-btn {
+            pointer-events: auto; background: rgba(255, 255, 255, 0.5); width: 80px; height: 80px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 40px; user-select: none; border: 3px solid rgba(0,0,0,0.2); cursor: pointer;
+        }
+        @media (max-width: 768px) { #mobileControls { display: flex; } }
+    </style>
+</head>
+<body>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="absolute top-4 left-4 right-4 flex justify-between text-2xl font-bold text-white drop-shadow-md hidden z-10 pointer-events-none">
+        <div class="bg-blue-600/80 px-4 py-2 rounded-lg">Münzen: <span id="coinCount" class="text-yellow-300">0</span> / 30</div>
+        <div class="bg-green-600/80 px-4 py-2 rounded-lg">Ziel in: <span id="distanceCount">0</span> km</div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div id="mobileControls" class="z-10">
+        <div class="control-btn" id="btnUp">⬆️</div>
+        <div class="control-btn" id="btnDown">⬇️</div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="ui-layer z-20">
+        <div class="ui-content text-center">
+            <h1 class="text-3xl font-bold text-blue-800 mb-4">Mr. Lemurs Ferienreise</h1>
+            <p class="text-gray-700 mb-4 text-left text-sm italic">
+                "Juhu, Sommerferien! Mr. Lemur bestreicht sein letztes Brot mit Käse und flitzt in die Küche, wo die Eichhörnchen bereits schon eifrig die Brote für die Ferien backten. Er rannte dreimal um die Tische und springt dreimal bis zur Decke. Dann setzte er sich hin und fragte: 'Was plant ihr in den Ferien?' Die Tiere erzählten. Als alle fertig erzählt haben, hingen sie auf die Tür das Schild 'GESCHLOSSEN'."
+            </p>
+            <h2 class="text-xl font-bold text-gray-800 mb-2 mt-6">Wie reist du?</h2>
+            
+            <div class="mb-4 text-left">
+                <label class="block font-semibold mb-1">1. Mit was fährst du?</label>
+                <select id="vehicleSelect" class="w-full p-2 border rounded-md text-lg">
+                    <option value="auto">🚗 Auto (Schnell)</option>
+                    <option value="fahrrad">🚲 Fahrrad (Mittelschnell)</option>
+                    <option value="roller">🛴 E-Roller (Mittellangsam)</option>
+                </select>
+            </div>
+
+            <div class="mb-6 text-left">
+                <label class="block font-semibold mb-1">2. Wohin fährst du?</label>
+                <select id="destinationSelect" class="w-full p-2 border rounded-md text-lg">
+                    <option value="australien">🦘 Australien (Lang)</option>
+                    <option value="italien">🍕 Italien (Mittellang)</option>
+                    <option value="oesterreich">🥨 Österreich (Kurz)</option>
+                </select>
+            </div>
+
+            <div class="bg-yellow-100 p-3 rounded-md text-sm text-left mb-6">
+                <strong>Ziel:</strong> Sammle mindestens 30 Münzen, bevor du das Hotel erreichst!<br>
+                <strong>Achtung:</strong> 🍦 Eis (-2 Münzen), 🪨 Spitzer Stein (-5 Münzen). 🚌 Bus (-3 Münzen, nur für Fahrrad/Roller).<br>
+                <strong>Steuerung:</strong> Pfeiltasten ⬆️ ⬇️ oder Tasten auf dem Bildschirm (Handy).
+            </div>
+
+            <button id="startBtn" class="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-bold py-3 px-8 rounded-full text-xl shadow-lg w-full">
+                Urlaub Starten!
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="endScreen" class="ui-layer hidden z-20">
+        <div class="ui-content text-center">
+            <h1 id="endTitle" class="text-4xl font-bold mb-4">Ziel erreicht!</h1>
+            <p id="endMessage" class="text-xl mb-6 text-gray-700"></p>
+            <div class="text-2xl font-bold mb-6">Gesammelte Münzen: <span id="finalCoins" class="text-yellow-500">0</span></div>
+            <button id="restartBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full text-xl shadow-lg w-full">
+                Nochmal spielen
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // UI Elements
+        const startScreen = document.getElementById('startScreen');
+        const endScreen = document.getElementById('endScreen');
+        const hud = document.getElementById('hud');
+        const startBtn = document.getElementById('startBtn');
+        const restartBtn = document.getElementById('restartBtn');
+        const coinCountDisplay = document.getElementById('coinCount');
+        const distanceCountDisplay = document.getElementById('distanceCount');
+        
+        // Game State
+        let gameState = 'start'; // start, playing, end
+        let animationId;
+        
+        // Game Variables
+        let coins = 0;
+        let distance = 0; // Total distance to travel
+        let currentDistance = 0;
+        let gameSpeed = 5;
+        let frameCount = 0;
+
+      let stripeOffset = 0;
+        
+        // Config
+        const vehicleConfig = {
+            auto: { emoji: '🚗', speed: 8, width: 60, height: 40 },
+            fahrrad: { emoji: '🚲', speed: 5, width: 50, height: 40 },
+            roller: { emoji: '🛴', speed: 3.5, width: 40, height: 40 }
+        };
+        
+        const destinationConfig = {
+            australien: { dist: 8000, name: 'Australien' },
+            italien: { dist: 5000, name: 'Italien' },
+            oesterreich: { dist: 3000, name: 'Österreich' }
+        };
+
+        // Player Object
+        let player = {
+            x: 100,
+            y: 0,
+            width: 50,
+            height: 40,
+            emoji: '🚗',
+            type: 'auto',
+            moveUp: false,
+            moveDown: false,
+            speedY: 6
+        };
+
+        // Entities arrays
+        let items = [];
+        let particles = [];
+
+        // Resize Canvas
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if(gameState === 'start') {
+                player.y = canvas.height / 2;
+                drawBackground();
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Controls (Keyboard)
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowUp') player.moveUp = true;
+            if (e.key === 'ArrowDown') player.moveDown = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowUp') player.moveUp = false;
+            if (e.key === 'ArrowDown') player.moveDown = false;
+        });
+
+        // Controls (Mobile)
+        const btnUp = document.getElementById('btnUp');
+        const btnDown = document.getElementById('btnDown');
+        
+        const handleTouchStart = (btn, isUp) => (e) => { e.preventDefault(); if(isUp) player.moveUp = true; else player.moveDown = true; btn.style.background = 'rgba(255,255,255,0.8)'; };
+        const handleTouchEnd = (btn, isUp) => (e) => { e.preventDefault(); if(isUp) player.moveUp = false; else player.moveDown = false; btn.style.background = 'rgba(255,255,255,0.5)'; };
+
+        btnUp.addEventListener('touchstart', handleTouchStart(btnUp, true), {passive: false});
+        btnUp.addEventListener('mousedown', handleTouchStart(btnUp, true));
+        btnUp.addEventListener('touchend', handleTouchEnd(btnUp, true), {passive: false});
+        btnUp.addEventListener('mouseup', handleTouchEnd(btnUp, true));
+        btnUp.addEventListener('mouseleave', handleTouchEnd(btnUp, true));
+
+        btnDown.addEventListener('touchstart', handleTouchStart(btnDown, false), {passive: false});
+        btnDown.addEventListener('mousedown', handleTouchStart(btnDown, false));
+        btnDown.addEventListener('touchend', handleTouchEnd(btnDown, false), {passive: false});
+        btnDown.addEventListener('mouseup', handleTouchEnd(btnDown, false));
+        btnDown.addEventListener('mouseleave', handleTouchEnd(btnDown, false));
+
+        // Start Game Funktion
+        function startGame(e) {
+            if (e) e.preventDefault();
+            if (gameState === 'playing') return;
+
+            const vType = document.getElementById('vehicleSelect').value;
+            const dType = document.getElementById('destinationSelect').value;
+            
+            player.type = vType;
+            player.emoji = vehicleConfig[vType].emoji;
+            player.width = vehicleConfig[vType].width;
+            player.height = vehicleConfig[vType].height;
+            gameSpeed = vehicleConfig[vType].speed;
+            
+            distance = destinationConfig[dType].dist;
+            currentDistance = distance;
+            
+            coins = 0;
+            items = [];
+            particles = [];
+            player.y = canvas.height / 2;
+            
+            startScreen.classList.add('hidden');
+            hud.classList.remove('hidden');
+            gameState = 'playing';
+            
+            gameLoop();
+        }
+
+        startBtn.addEventListener('click', startGame);
+        startBtn.addEventListener('touchstart', startGame, { passive: false });
+
+        restartBtn.addEventListener('click', () => location.reload());
+        restartBtn.addEventListener('touchstart', (e) => { e.preventDefault(); location.reload(); }, { passive: false });
+
+        // Spawn Entities
+        function spawnEntities() {
+            const topMargin = canvas.height * 0.2;
+            const bottomMargin = canvas.height * 0.8;
+            const yPos = topMargin + Math.random() * (bottomMargin - topMargin);
+
+            let spawnChance = 0.03 * (gameSpeed / 5); 
+
+            if (Math.random() < spawnChance) {
+                let typeRand = Math.random();
+                let item = { x: canvas.width + 50, y: yPos, width: 40, height: 40, active: true };
+
+                if (typeRand < 0.6) {
+                    item.type = 'coin'; item.emoji = '🪙';
+                } else if (typeRand < 0.8) {
+                    item.type = 'eis'; item.emoji = '🍦';
+                } else if (typeRand < 0.9) {
+                    item.type = 'stein'; item.emoji = '🪨';
+                } else {
+                    item.type = 'bus'; item.emoji = '🚌'; item.width = 60; item.height = 50;
+                }
+                items.push(item);
+            }
+        }
+
+        // Particle System
+        function spawnParticle(x, y, text, color) {
+            particles.push({ x: x, y: y, text: text, color: color, life: 60, vy: -2 });
+        }
+
+        // Check Collision
+        function checkCollision(rect1, rect2) {
+            return (
+                rect1.x < rect2.x + rect2.width &&
+                rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.height &&
+                rect1.y + rect1.height > rect2.y
+            );
+        }
+
+        // Draw Background
+        
+        function drawBackground() {
+            ctx.fillStyle = '#7CFC00'; // Grass
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const roadTop = canvas.height * 0.15;
+            const roadHeight = canvas.height * 0.7;
+            ctx.fillStyle = '#555'; // Road
+            ctx.fillRect(0, roadTop, canvas.width, roadHeight);
+
+            ctx.fillStyle = '#FFF'; // Road lines
+            stripeOffset -= gameSpeed;
+            if (stripeOffset <= -60) stripeOffset = 0;
+            
+            for (let i = stripeOffset; i < canvas.width; i += 60) {
+                ctx.fillRect(i, canvas.height / 2 - 5, 30, 10);
+            }
+        }
+
+        // Main Game Loop
+        function gameLoop() {
+            if (gameState !== 'playing') return;
+
+            currentDistance -= gameSpeed;
+            if (currentDistance <= 0) {
+                endGame();
+                return;
+            }
+
+            coinCountDisplay.innerText = coins;
+            if(coins >= 30) coinCountDisplay.classList.replace('text-yellow-300', 'text-green-400');
+            else coinCountDisplay.classList.replace('text-green-400', 'text-yellow-300');
+            distanceCountDisplay.innerText = Math.max(0, Math.floor(currentDistance / 10));
+
+            if (player.moveUp) player.y -= player.speedY;
+            if (player.moveDown) player.y += player.speedY;
+
+            const topMargin = canvas.height * 0.15;
+            const bottomMargin = canvas.height * 0.85 - player.height;
+            if (player.y < topMargin) player.y = topMargin;
+            if (player.y > bottomMargin) player.y = bottomMargin;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+
+            spawnEntities();
+            
+            ctx.font = "40px Arial";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "top";
+
+            for (let i = items.length - 1; i >= 0; i--) {
+                let item = items[i];
+                item.x -= gameSpeed;
+
+                if (item.active && checkCollision(player, item)) {
+                    item.active = false;
+                    
+                    if (item.type === 'coin') {
+                        coins++;
+                        spawnParticle(player.x, player.y - 20, "+1", "#FFD700");
+                    } else if (item.type === 'eis') {
+                        coins = Math.max(0, coins - 2);
+                        spawnParticle(player.x, player.y - 20, "-2 (Eis)", "#FF69B4");
+                    } else if (item.type === 'stein') {
+                        coins = Math.max(0, coins - 5);
+                        spawnParticle(player.x, player.y - 20, "-5 (Platten!)", "#FF0000");
+                        player.x -= 20;
+                        setTimeout(() => { player.x = 100; }, 500);
+                    } else if (item.type === 'bus') {
+                        if (player.type === 'fahrrad' || player.type === 'roller') {
+                            coins = Math.max(0, coins - 3);
+                            spawnParticle(player.x, player.y - 20, "-3 (Ticket)", "#FFA500");
+                        } else {
+                            spawnParticle(player.x, player.y - 20, "Hupen!", "#FFFFFF");
+                        }
+                    }
+                }
+
+                if (item.active) {
+                    ctx.font = `${item.width}px Arial`;
+                    ctx.fillText(item.emoji, item.x, item.y);
+                } else {
+                    items.splice(i, 1);
+                }
+
+                if (item.x < -100) items.splice(i, 1);
+            }
+
+            ctx.font = `${player.width}px Arial`;
+            ctx.fillText(player.emoji, player.x, player.y);
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.y += p.vy;
+                p.life--;
+                
+                ctx.globalAlpha = p.life / 60;
+                ctx.fillStyle = p.color;
+                ctx.font = "bold 24px Arial";
+                ctx.fillText(p.text, p.x, p.y);
+                ctx.globalAlpha = 1.0;
+
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            frameCount++;
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        // End Game
+        function endGame() {
+            gameState = 'end';
+            hud.classList.add('hidden');
+            endScreen.classList.remove('hidden');
+            document.getElementById('mobileControls').style.display = 'none';
+            
+            document.getElementById('finalCoins').innerText = coins;
+            
+            const title = document.getElementById('endTitle');
+            const message = document.getElementById('endMessage');
+            
+            if (coins >= 30) {
+                title.innerText = "🏆 Hotel erreicht!";
+                title.className = "text-5xl font-bold mb-4 text-green-600";
+                message.innerText = `Glückwunsch! Du bist im Hotel angekommen und hast ${coins} Münzen für den Urlaub. Mr. Lemur und die Eichhörnchen sind stolz auf dich!`;
+            } else {
+                title.innerText = "😢 Hotel erreicht... aber pleite.";
+                title.className = "text-5xl font-bold mb-4 text-red-600";
+                message.innerText = `Du bist angekommen, hast aber nur ${coins} Münzen gesammelt. Du brauchst 30 Münzen, um das Hotel zu bezahlen! Versuche es noch einmal.`;
+            }
+        }
+
+        drawBackground();
+    </script>
+
+</body></html>
